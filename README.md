@@ -15,7 +15,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    ```bash
    npx expo start --tunnel
    ```
-Branches:
-prod is the latest version of the app. Should be working at any given time.
-staging is pre-prod. Should be working but we can do tests here.
-when you want to commit a change to the app, pr into staging with the name of the change as your branch name e.g. UI_color -> staging
+## Branches:
+## prod is the latest version of the app. Should be working at any given time.
+## staging is pre-prod. Should be working but we can do tests here.
+## when you want to commit a change to the app, pr into staging with the name of the change as your branch name e.g. UI_color -> staging
