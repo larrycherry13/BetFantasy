@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -6,6 +7,7 @@ import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AuthService, User } from '@/utils/auth';
 
 const { width } = Dimensions.get('window');
 
@@ -13,6 +15,7 @@ export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const [tapCount, setTapCount] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   
   // Animation values
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -21,6 +24,20 @@ export default function HomeScreen() {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   
+  // Check authentication
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    const user = await AuthService.getCurrentUser();
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
+    setCurrentUser(user);
+  };
+
   // Continuous pulsing animation
   useEffect(() => {
     const pulse = Animated.loop(
@@ -308,6 +325,46 @@ export default function HomeScreen() {
         <TouchableOpacity style={[styles.closingCTA, { backgroundColor: neonColor }]}>
           <Text style={styles.closingCTAText}>Join the Beta →</Text>
         </TouchableOpacity>
+        
+        {currentUser?.isAdmin && (
+          <>
+            <TouchableOpacity 
+              style={[styles.adminButton, { borderColor: '#ff0088' }]}
+              onPress={() => router.push('/admin')}
+            >
+              <Text style={[styles.adminButtonText, { color: '#ff0088' }]}>
+                👑 Admin Panel
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.adminButton, { borderColor: '#00ff88', marginTop: 10 }]}
+              onPress={() => router.push('/test-odds')}
+            >
+              <Text style={[styles.adminButtonText, { color: '#00ff88' }]}>
+                🎯 Test Live Odds
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.adminButton, { borderColor: '#ff00ff', marginTop: 10 }]}
+              onPress={() => router.push('/test-player-td')}
+            >
+              <Text style={[styles.adminButtonText, { color: '#ff00ff' }]}>
+                🏈 Test Player TD Odds
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.adminButton, { borderColor: '#ff4444', marginTop: 10 }]}
+              onPress={() => router.push('/debug-odds')}
+            >
+              <Text style={[styles.adminButtonText, { color: '#ff4444' }]}>
+                🔍 Debug Odds API
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
       </ThemedView>
     </ParallaxScrollView>
   );
@@ -726,5 +783,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  adminButton: {
+    marginTop: 15,
+    paddingHorizontal: 25,
+    paddingVertical: 12,
+    borderRadius: 25,
+    borderWidth: 2,
+    alignItems: 'center',
+  },
+  adminButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

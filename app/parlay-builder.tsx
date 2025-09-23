@@ -6,6 +6,8 @@ import { BetFantasyLogo } from '@/components/betfantasy-logo';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AuthService } from '@/utils/auth';
+import { OddsService } from '@/utils/oddsApi';
 
 // Template data (same as explore page)
 const parlayTemplates = [
@@ -120,12 +122,51 @@ export default function ParlayBuilder() {
   
   const template = parlayTemplates.find(t => t.id === parseInt(templateId as string)) || parlayTemplates[0];
   const [selectedPicks, setSelectedPicks] = useState<{ [key: number]: string }>({});
+  const [pickOdds, setPickOdds] = useState<{ [key: number]: { odds: number; description: string } }>({});
+  const [parlayPayout, setParlayPayout] = useState<{
+    totalOdds: number;
+    payout: number;
+    profit: number;
+    formattedOdds: string;
+  } | null>(null);
+  const [loadingOdds, setLoadingOdds] = useState<{ [key: number]: boolean }>({});
   
-  const handlePickSelection = (legIndex: number, pick: string) => {
+  const handlePickSelection = async (legIndex: number, pick: string) => {
     setSelectedPicks(prev => ({
       ...prev,
       [legIndex]: pick
     }));
+    
+    // Fetch real-time odds for this pick
+    setLoadingOdds(prev => ({ ...prev, [legIndex]: true }));
+    
+    try {
+      const pickTemplate = template.picks[legIndex].template;
+      const oddsData = await OddsService.getPickOdds(pickTemplate, pick);
+      
+      if (oddsData) {
+        setPickOdds(prev => ({
+          ...prev,
+          [legIndex]: oddsData
+        }));
+        
+        // Recalculate parlay payout
+        updateParlayPayout();
+      }
+    } catch (error) {
+      console.error('Failed to fetch pick odds:', error);
+    } finally {
+      setLoadingOdds(prev => ({ ...prev, [legIndex]: false }));
+    }
+  };
+  
+  // Update parlay payout calculation
+  const updateParlayPayout = () => {
+    const allOdds = Object.values(pickOdds).map(pick => pick.odds);
+    if (allOdds.length === template.picks.length) {
+      const payout = OddsService.calculateParlayPayout(allOdds, 100);
+      setParlayPayout(payout);
+    }
   };
   
   const formatFinalPick = (pickTemplate: any, selectedOption: string) => {
@@ -141,27 +182,53 @@ export default function ParlayBuilder() {
   
   const isReadyToSubmit = Object.keys(selectedPicks).length === template.picks.length;
   
-  const handleSubmitParlay = () => {
+  const handleSubmitParlay = async () => {
     if (!isReadyToSubmit) {
       Alert.alert("Incomplete Parlay", "Please make all your picks before submitting!");
       return;
     }
     
+    const currentUser = await AuthService.getCurrentUser();
+    if (!currentUser) {
+      Alert.alert("Error", "Please log in to submit parlays");
+      return;
+    }
+    
     const finalParlay = template.picks.map((pick, index) => ({
-      original: pick.template,
+      template: pick.template,
+      selection: selectedPicks[index],
       final: formatFinalPick(pick, selectedPicks[index]),
-      selection: selectedPicks[index]
+      odds: pickOdds[index]?.odds || OddsService.getEstimatedOdds(pick.template),
+      oddsDescription: pickOdds[index]?.description || `${selectedPicks[index]} (Estimated)`
     }));
     
-    // For now, just show success - later this would save to backend
-    Alert.alert(
-      "Parlay Submitted! 🎉",
-      `Your ${template.name} parlay has been created!\n\nPicks:\n${finalParlay.map(p => `• ${p.final}`).join('\n')}`,
-      [
-        { text: "View My Parlays", onPress: () => router.push('/') },
-        { text: "Build Another", onPress: () => router.back() }
-      ]
-    );
+    // Save parlay to storage
+    const success = await AuthService.saveParlay({
+      userId: currentUser.id,
+      week: "Week 4", // TODO: Make this dynamic based on current week
+      templateId: template.id,
+      templateName: template.name,
+      status: 'pending',
+      points: 0,
+      picks: finalParlay
+    });
+    
+    if (success) {
+      const payoutText = parlayPayout 
+        ? `\n\nPotential Payout: $${parlayPayout.payout} (Profit: $${parlayPayout.profit})\nOdds: ${parlayPayout.formattedOdds}`
+        : '';
+      
+      Alert.alert(
+        "Parlay Submitted! 🎉",
+        `Your ${template.name} parlay has been created!\n\nPicks:\n${finalParlay.map(p => `• ${p.final} (${OddsService.formatOdds(p.odds)})`).join('\n')}${payoutText}\n\nResults will be updated after games complete.`,
+        [
+          { text: "View Profile", onPress: () => router.push('/(tabs)/profile') },
+          { text: "Build Another", onPress: () => router.back() }
+        ]
+      );
+    } else {
+      Alert.alert("Error", "Failed to save parlay. Please try again.");
+    }
   };
 
   return (
@@ -240,7 +307,16 @@ export default function ParlayBuilder() {
             
             {selectedPicks[index] && (
               <View style={[styles.previewContainer, { backgroundColor: `${template.color}20` }]}>
-                <ThemedText style={styles.previewLabel}>Your Pick:</ThemedText>
+                <View style={styles.previewHeader}>
+                  <ThemedText style={styles.previewLabel}>Your Pick:</ThemedText>
+                  {loadingOdds[index] ? (
+                    <ThemedText style={styles.loadingOdds}>Loading odds...</ThemedText>
+                  ) : pickOdds[index] ? (
+                    <Text style={[styles.oddsText, { color: template.color }]}>
+                      {OddsService.formatOdds(pickOdds[index].odds)}
+                    </Text>
+                  ) : null}
+                </View>
                 <ThemedText style={[styles.previewText, { color: template.color }]}>
                   {formatFinalPick(pick, selectedPicks[index])}
                 </ThemedText>
@@ -249,6 +325,39 @@ export default function ParlayBuilder() {
           </View>
         ))}
       </ThemedView>
+
+      {/* Parlay Summary */}
+      {parlayPayout && (
+        <ThemedView style={[styles.parlaySummary, { borderColor: template.color }]}>
+          <ThemedText style={styles.summaryTitle}>📊 Parlay Summary</ThemedText>
+          
+          <View style={styles.summaryRow}>
+            <ThemedText style={styles.summaryLabel}>Total Odds:</ThemedText>
+            <Text style={[styles.summaryValue, { color: template.color }]}>
+              {parlayPayout.formattedOdds}
+            </Text>
+          </View>
+          
+          <View style={styles.summaryRow}>
+            <ThemedText style={styles.summaryLabel}>Bet Amount:</ThemedText>
+            <Text style={styles.summaryValue}>$100.00</Text>
+          </View>
+          
+          <View style={styles.summaryRow}>
+            <ThemedText style={styles.summaryLabel}>Potential Payout:</ThemedText>
+            <Text style={[styles.summaryValueLarge, { color: template.color }]}>
+              ${parlayPayout.payout}
+            </Text>
+          </View>
+          
+          <View style={styles.summaryRow}>
+            <ThemedText style={styles.summaryLabel}>Potential Profit:</ThemedText>
+            <Text style={[styles.summaryValueLarge, { color: '#00ff41' }]}>
+              ${parlayPayout.profit}
+            </Text>
+          </View>
+        </ThemedView>
+      )}
 
       {/* Submit Button */}
       <ThemedView style={styles.submitContainer}>
@@ -264,7 +373,12 @@ export default function ParlayBuilder() {
           disabled={!isReadyToSubmit}
         >
           <Text style={styles.submitButtonText}>
-            {isReadyToSubmit ? '🚀 Submit Parlay' : `Complete ${template.legs - Object.keys(selectedPicks).length} more picks`}
+            {isReadyToSubmit 
+              ? parlayPayout 
+                ? `🚀 Submit Parlay (Win $${parlayPayout.profit})` 
+                : '🚀 Submit Parlay'
+              : `Complete ${template.legs - Object.keys(selectedPicks).length} more picks`
+            }
           </Text>
         </TouchableOpacity>
       </ThemedView>
@@ -413,6 +527,52 @@ const styles = StyleSheet.create({
   },
   previewText: {
     fontSize: 14,
+    fontWeight: 'bold',
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  loadingOdds: {
+    fontSize: 12,
+    opacity: 0.6,
+    fontStyle: 'italic',
+  },
+  oddsText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  parlaySummary: {
+    margin: 15,
+    padding: 20,
+    borderRadius: 15,
+    borderWidth: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    opacity: 0.8,
+  },
+  summaryValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  summaryValueLarge: {
+    fontSize: 18,
     fontWeight: 'bold',
   },
   submitContainer: {
