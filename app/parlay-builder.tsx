@@ -1,12 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { BetFantasyLogo } from '@/components/betfantasy-logo';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+// Template data (same as explore page)
 const parlayTemplates = [
   {
     id: 1,
@@ -14,8 +15,8 @@ const parlayTemplates = [
     difficulty: "🟢",
     legs: 2,
     picks: [
-      "[Team] Moneyline",
-      "Over/Under [X] Total Points"
+      { template: "[Team] Moneyline", options: ["Chiefs", "Bills", "Cowboys", "49ers", "Eagles"] },
+      { template: "Over 52.5 Total Points", options: ["Chiefs vs Bills", "Cowboys vs Giants", "49ers vs Rams"] }
     ],
     description: "Simple 2-leg pick, low barrier to entry.",
     color: "#00ff41",
@@ -27,8 +28,8 @@ const parlayTemplates = [
     difficulty: "🟡",
     legs: 2,
     picks: [
-      "[Player] Over [X] Rushing Yards",
-      "[Team] Moneyline"
+      { template: "[Player] Over 75 Rushing Yards", options: ["Derrick Henry", "Josh Jacobs", "Christian McCaffrey", "Saquon Barkley"] },
+      { template: "[Team] Moneyline", options: ["Titans", "Raiders", "Panthers", "Giants"] }
     ],
     description: "Mix of player + team outcome.",
     color: "#ffff00",
@@ -40,9 +41,9 @@ const parlayTemplates = [
     difficulty: "🟠",
     legs: 3,
     picks: [
-      "[Player] Anytime Touchdown",
-      "[Quarterback] Over [X] Passing Yards",
-      "[Team] Over [X] Points"
+      { template: "[Player] Anytime Touchdown", options: ["Travis Kelce", "Tyreek Hill", "Davante Adams", "Cooper Kupp"] },
+      { template: "[Quarterback] Over 275 Passing Yards", options: ["Patrick Mahomes", "Josh Allen", "Aaron Rodgers", "Tom Brady"] },
+      { template: "[Team] Over 24.5 Points", options: ["Chiefs", "Bills", "Packers", "Bucs"] }
     ],
     description: "Three-leg combo, still straightforward.",
     color: "#ff8800",
@@ -54,9 +55,9 @@ const parlayTemplates = [
     difficulty: "🟠",
     legs: 3,
     picks: [
-      "[Underdog Team] Spread (+X.5)",
-      "[Player] Over [X] Receiving Yards",
-      "Game Total Over/Under [X]"
+      { template: "[Underdog Team] Spread (+7.5)", options: ["Lions +7.5", "Jets +7.5", "Commanders +7.5"] },
+      { template: "[Player] Over 85 Receiving Yards", options: ["Stefon Diggs", "DeAndre Hopkins", "Mike Evans"] },
+      { template: "Game Total Over 48.5", options: ["Bills vs Jets O48.5", "Bucs vs Saints O48.5"] }
     ],
     description: "Rewards picking an underdog + player prop.",
     color: "#ff4444",
@@ -68,10 +69,10 @@ const parlayTemplates = [
     difficulty: "🔴",
     legs: 4,
     picks: [
-      "[Team] Moneyline",
-      "[Player] Anytime Touchdown",
-      "[Quarterback] Over [X] Completions",
-      "Game Total Over/Under [X]"
+      { template: "[Team] Moneyline", options: ["Chiefs", "Bills", "Eagles", "49ers"] },
+      { template: "[Player] Anytime Touchdown", options: ["Travis Kelce", "Stefon Diggs", "A.J. Brown", "Christian McCaffrey"] },
+      { template: "[Quarterback] Over 22.5 Completions", options: ["Patrick Mahomes", "Josh Allen", "Jalen Hurts", "Brock Purdy"] },
+      { template: "Game Total Over 45.5", options: ["Chiefs vs Chargers O45.5", "Bills vs Dolphins O45.5"] }
     ],
     description: "Well-rounded parlay with offense spread across positions.",
     color: "#ff0088",
@@ -83,11 +84,11 @@ const parlayTemplates = [
     difficulty: "🔴",
     legs: 5,
     picks: [
-      "[Player] Over [X] Rushing Yards",
-      "[Player] Anytime Touchdown",
-      "[Quarterback] Over [X] Passing Yards",
-      "[Team] Spread (-X.5)",
-      "Total Points Over/Under [X]"
+      { template: "[Player] Over 100 Rushing Yards", options: ["Derrick Henry", "Josh Jacobs", "Christian McCaffrey"] },
+      { template: "[Player] Anytime Touchdown", options: ["Travis Kelce", "Tyreek Hill", "Davante Adams"] },
+      { template: "[Quarterback] Over 300 Passing Yards", options: ["Patrick Mahomes", "Josh Allen", "Aaron Rodgers"] },
+      { template: "[Team] Spread (-3.5)", options: ["Chiefs -3.5", "Bills -3.5", "Eagles -3.5"] },
+      { template: "Total Points Over 50.5", options: ["Chiefs vs Bills O50.5", "Cowboys vs Eagles O50.5"] }
     ],
     description: "Higher risk with 5 combined outcomes.",
     color: "#8800ff",
@@ -99,12 +100,12 @@ const parlayTemplates = [
     difficulty: "🟣",
     legs: 6,
     picks: [
-      "[Quarterback] Over [X] Passing TDs",
-      "[Player] 100+ Rushing Yards",
-      "[Player] 100+ Receiving Yards",
-      "[Team] Moneyline",
-      "Total Points Over [X]",
-      "[Defense] 1+ Interception"
+      { template: "[Quarterback] Over 2.5 Passing TDs", options: ["Patrick Mahomes", "Josh Allen", "Joe Burrow"] },
+      { template: "[Player] 100+ Rushing Yards", options: ["Derrick Henry", "Christian McCaffrey", "Josh Jacobs"] },
+      { template: "[Player] 100+ Receiving Yards", options: ["Tyreek Hill", "Davante Adams", "Cooper Kupp"] },
+      { template: "[Team] Moneyline", options: ["Chiefs", "Bills", "Bengals"] },
+      { template: "Total Points Over 55.5", options: ["Chiefs vs Bills O55.5", "Bengals vs Ravens O55.5"] },
+      { template: "[Defense] 1+ Interception", options: ["Chiefs Defense", "Bills Defense", "49ers Defense"] }
     ],
     description: "Big 6-leg parlay designed to feel like the \"jackpot card.\"",
     color: "#ff00ff",
@@ -112,233 +113,158 @@ const parlayTemplates = [
   }
 ];
 
-export default function ParlayBuilderScreen() {
+export default function ParlayBuilder() {
   const { templateId } = useLocalSearchParams();
   const colorScheme = useColorScheme();
-  const [selectedPicks, setSelectedPicks] = useState({});
-  const [tapCount, setTapCount] = useState(0);
-  
-  // Animation values
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
   const neonColor = colorScheme === 'dark' ? '#00ff41' : '#39ff14';
   
-  // Find the selected template
-  const selectedTemplate = parlayTemplates.find(t => t.id === parseInt(templateId as string));
-
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulse.start();
-  }, []);
-
-  const handleLogoTap = () => {
-    setTapCount(tapCount + 1);
-    
-    Animated.sequence([
-      Animated.timing(scaleAnim, {
-        toValue: 1.2,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const handlePickSelection = (pickIndex: number, selection: string) => {
+  const template = parlayTemplates.find(t => t.id === parseInt(templateId as string)) || parlayTemplates[0];
+  const [selectedPicks, setSelectedPicks] = useState<{ [key: number]: string }>({});
+  
+  const handlePickSelection = (legIndex: number, pick: string) => {
     setSelectedPicks(prev => ({
       ...prev,
-      [pickIndex]: selection
+      [legIndex]: pick
     }));
   };
-
-  const getPickOptions = (pick: string) => {
-    if (pick.includes("Moneyline")) {
-      return ["Chiefs", "Bills", "Dolphins", "Ravens", "Bengals", "Jaguars"];
-    }
-    if (pick.includes("Over/Under") || pick.includes("Total")) {
-      return ["Over 45.5", "Under 45.5", "Over 48.5", "Under 48.5", "Over 52.5", "Under 52.5"];
-    }
-    if (pick.includes("Rushing Yards")) {
-      return ["Over 75.5", "Under 75.5", "Over 100.5", "Under 100.5", "Over 125.5", "Under 125.5"];
-    }
-    if (pick.includes("Passing Yards")) {
-      return ["Over 250.5", "Under 250.5", "Over 275.5", "Under 275.5", "Over 300.5", "Under 300.5"];
-    }
-    if (pick.includes("Touchdown")) {
-      return ["Yes", "No"];
-    }
-    if (pick.includes("Spread")) {
-      return ["+3.5", "+7.5", "+10.5", "-3.5", "-7.5", "-10.5"];
-    }
-    if (pick.includes("Completions")) {
-      return ["Over 20.5", "Under 20.5", "Over 25.5", "Under 25.5", "Over 30.5", "Under 30.5"];
-    }
-    if (pick.includes("Receiving Yards")) {
-      return ["Over 60.5", "Under 60.5", "Over 80.5", "Under 80.5", "Over 100.5", "Under 100.5"];
-    }
-    if (pick.includes("Interception")) {
-      return ["Yes", "No"];
-    }
-    return ["Option 1", "Option 2", "Option 3"];
+  
+  const formatFinalPick = (pickTemplate: any, selectedOption: string) => {
+    if (!selectedOption) return pickTemplate.template;
+    
+    let result = pickTemplate.template;
+    
+    // Replace [Player], [Team], [Quarterback], etc. with selected option
+    result = result.replace(/\[Player\]|\[Team\]|\[Quarterback\]|\[Underdog Team\]|\[Defense\]/g, selectedOption);
+    
+    return result;
   };
-
-  if (!selectedTemplate) {
-    return (
-      <ThemedView style={styles.container}>
-        <ThemedText>Template not found</ThemedText>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text>Go Back</Text>
-        </TouchableOpacity>
-      </ThemedView>
+  
+  const isReadyToSubmit = Object.keys(selectedPicks).length === template.picks.length;
+  
+  const handleSubmitParlay = () => {
+    if (!isReadyToSubmit) {
+      Alert.alert("Incomplete Parlay", "Please make all your picks before submitting!");
+      return;
+    }
+    
+    const finalParlay = template.picks.map((pick, index) => ({
+      original: pick.template,
+      final: formatFinalPick(pick, selectedPicks[index]),
+      selection: selectedPicks[index]
+    }));
+    
+    // For now, just show success - later this would save to backend
+    Alert.alert(
+      "Parlay Submitted! 🎉",
+      `Your ${template.name} parlay has been created!\n\nPicks:\n${finalParlay.map(p => `• ${p.final}`).join('\n')}`,
+      [
+        { text: "View My Parlays", onPress: () => router.push('/') },
+        { text: "Build Another", onPress: () => router.back() }
+      ]
     );
-  }
+  };
 
   return (
     <ScrollView style={styles.container}>
-      {/* Header with Logo */}
-      <ThemedView style={styles.headerSection}>
-        <TouchableOpacity onPress={handleLogoTap} activeOpacity={0.8}>
-          <Animated.View
-            style={[
-              styles.logoWrapper,
-              {
-                transform: [
-                  { scale: pulseAnim },
-                  { scale: scaleAnim }
-                ],
-              },
-            ]}
-          >
-            <BetFantasyLogo size={150} />
-            
-            {tapCount > 0 && (
-              <Animated.Text
-                style={[
-                  styles.tapCounter,
-                  {
-                    color: neonColor,
-                  },
-                ]}
-              >
-                +{tapCount * 100} points!
-              </Animated.Text>
-            )}
-          </Animated.View>
+      {/* Header */}
+      <ThemedView style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
+        <BetFantasyLogo size={60} />
       </ThemedView>
 
       {/* Template Info */}
-      <ThemedView style={styles.templateInfo}>
-        <View style={styles.templateHeader}>
-          <Text style={styles.difficultyIcon}>{selectedTemplate.difficulty}</Text>
-          <View style={styles.templateDetails}>
-            <ThemedText style={styles.templateName}>{selectedTemplate.name}</ThemedText>
-            <ThemedText style={styles.templateDescription}>{selectedTemplate.description}</ThemedText>
-          </View>
-          <View style={[styles.legsBadge, { backgroundColor: selectedTemplate.color + '20' }]}>
-            <Text style={[styles.legsText, { color: selectedTemplate.color }]}>
-              {selectedTemplate.legs} Legs
-            </Text>
+      <ThemedView style={[styles.templateHeader, { borderColor: template.color }]}>
+        <Text style={styles.difficultyIcon}>{template.difficulty}</Text>
+        <ThemedText style={styles.templateName}>{template.name}</ThemedText>
+        <ThemedText style={styles.templateDescription}>{template.description}</ThemedText>
+        <View style={styles.progressContainer}>
+          <Text style={[styles.progressText, { color: template.color }]}>
+            {Object.keys(selectedPicks).length}/{template.legs} picks made
+          </Text>
+          <View style={styles.progressBar}>
+            <View 
+              style={[
+                styles.progressFill, 
+                { 
+                  backgroundColor: template.color,
+                  width: `${(Object.keys(selectedPicks).length / template.legs) * 100}%`
+                }
+              ]} 
+            />
           </View>
         </View>
       </ThemedView>
 
-      {/* Pick Selection */}
-      <ThemedView style={styles.picksSection}>
-        <ThemedText style={styles.sectionTitle}>Customize Your Picks</ThemedText>
-        
-        {selectedTemplate.picks.map((pick, index) => (
-          <View key={index} style={styles.pickContainer}>
-            <ThemedText style={styles.pickLabel}>
-              Pick {index + 1}: {pick}
-            </ThemedText>
+      {/* Pick Builder */}
+      <ThemedView style={styles.picksContainer}>
+        <ThemedText style={styles.sectionTitle}>Build Your Parlay</ThemedText>
+        <ThemedText style={styles.sectionSubtitle}>
+          Choose your players and teams. All numbers are pre-set for you!
+        </ThemedText>
+
+        {template.picks.map((pick, index) => (
+          <View key={index} style={[styles.pickCard, { borderColor: template.color }]}>
+            <View style={styles.pickHeader}>
+              <Text style={[styles.pickNumber, { backgroundColor: template.color }]}>
+                {index + 1}
+              </Text>
+              <ThemedText style={styles.pickTemplate}>
+                {pick.template}
+              </ThemedText>
+            </View>
             
-            <View style={styles.optionsGrid}>
-              {getPickOptions(pick).map((option, optionIndex) => (
+            <View style={styles.optionsContainer}>
+              {pick.options.map((option, optionIndex) => (
                 <TouchableOpacity
                   key={optionIndex}
                   style={[
                     styles.optionButton,
-                    {
-                      backgroundColor: selectedPicks[index] === option 
-                        ? selectedTemplate.color 
-                        : 'rgba(0, 0, 0, 0.05)',
-                      borderColor: selectedTemplate.color,
+                    selectedPicks[index] === option && { 
+                      backgroundColor: template.color,
+                      borderColor: template.color 
                     }
                   ]}
                   onPress={() => handlePickSelection(index, option)}
                 >
                   <Text style={[
                     styles.optionText,
-                    {
-                      color: selectedPicks[index] === option ? '#000' : selectedTemplate.color,
-                    }
+                    selectedPicks[index] === option && styles.selectedOptionText
                   ]}>
                     {option}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
+            
+            {selectedPicks[index] && (
+              <View style={[styles.previewContainer, { backgroundColor: `${template.color}20` }]}>
+                <ThemedText style={styles.previewLabel}>Your Pick:</ThemedText>
+                <ThemedText style={[styles.previewText, { color: template.color }]}>
+                  {formatFinalPick(pick, selectedPicks[index])}
+                </ThemedText>
+              </View>
+            )}
           </View>
         ))}
       </ThemedView>
 
-      {/* Bottom Actions */}
-      <ThemedView style={styles.actionsSection}>
-        <View style={styles.progressContainer}>
-          <ThemedText style={styles.progressText}>
-            {Object.keys(selectedPicks).length} / {selectedTemplate.legs} picks selected
-          </ThemedText>
-          <View style={styles.progressBar}>
-            <View 
-              style={[
-                styles.progressFill,
-                {
-                  width: `${(Object.keys(selectedPicks).length / selectedTemplate.legs) * 100}%`,
-                  backgroundColor: selectedTemplate.color,
-                }
-              ]}
-            />
-          </View>
-        </View>
-
-        <TouchableOpacity 
+      {/* Submit Button */}
+      <ThemedView style={styles.submitContainer}>
+        <TouchableOpacity
           style={[
             styles.submitButton,
-            {
-              backgroundColor: Object.keys(selectedPicks).length === selectedTemplate.legs 
-                ? selectedTemplate.color 
-                : 'rgba(0, 0, 0, 0.2)',
+            { 
+              backgroundColor: isReadyToSubmit ? template.color : '#666',
+              opacity: isReadyToSubmit ? 1 : 0.5
             }
           ]}
-          disabled={Object.keys(selectedPicks).length !== selectedTemplate.legs}
-          onPress={() => {
-            console.log('Submitting parlay:', selectedPicks);
-            // TODO: Navigate to confirmation or submit
-          }}
+          onPress={handleSubmitParlay}
+          disabled={!isReadyToSubmit}
         >
           <Text style={styles.submitButtonText}>
-            {Object.keys(selectedPicks).length === selectedTemplate.legs 
-              ? '🚀 Submit Parlay' 
-              : `Complete ${selectedTemplate.legs - Object.keys(selectedPicks).length} more picks`}
+            {isReadyToSubmit ? '🚀 Submit Parlay' : `Complete ${template.legs - Object.keys(selectedPicks).length} more picks`}
           </Text>
         </TouchableOpacity>
       </ThemedView>
@@ -351,122 +277,150 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  headerSection: {
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 20,
-    backgroundColor: 'rgba(57, 255, 20, 0.05)',
+    paddingTop: 60,
   },
-  logoWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  backButton: {
+    padding: 10,
   },
-  tapCounter: {
+  backText: {
+    color: '#00ff41',
     fontSize: 16,
     fontWeight: 'bold',
-    marginTop: 10,
-    textShadowColor: 'currentColor',
-    textShadowRadius: 10,
-  },
-  templateInfo: {
-    margin: 15,
-    padding: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    borderRadius: 15,
   },
   templateHeader: {
-    flexDirection: 'row',
+    margin: 15,
+    padding: 20,
+    borderRadius: 15,
+    borderWidth: 2,
     alignItems: 'center',
   },
   difficultyIcon: {
-    fontSize: 24,
-    marginRight: 15,
-  },
-  templateDetails: {
-    flex: 1,
+    fontSize: 32,
+    marginBottom: 10,
   },
   templateName: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 5,
+    textAlign: 'center',
+    marginBottom: 10,
   },
   templateDescription: {
-    fontSize: 14,
+    fontSize: 16,
+    textAlign: 'center',
     opacity: 0.8,
+    marginBottom: 15,
   },
-  legsBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
+  progressContainer: {
+    width: '100%',
+    alignItems: 'center',
   },
-  legsText: {
+  progressText: {
     fontSize: 14,
     fontWeight: 'bold',
+    marginBottom: 8,
   },
-  picksSection: {
+  progressBar: {
+    width: '100%',
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  picksContainer: {
     margin: 15,
     padding: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 15,
   },
   sectionTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 20,
     textAlign: 'center',
+    marginBottom: 10,
   },
-  pickContainer: {
+  sectionSubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    opacity: 0.8,
     marginBottom: 25,
   },
-  pickLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
+  pickCard: {
+    marginBottom: 20,
+    padding: 15,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  pickHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 15,
   },
-  optionsGrid: {
+  pickNumber: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  pickTemplate: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  optionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+    marginBottom: 15,
   },
   optionButton: {
     paddingHorizontal: 15,
     paddingVertical: 10,
     borderRadius: 20,
-    borderWidth: 2,
-    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   optionText: {
     fontSize: 14,
-    fontWeight: 'bold',
-    textAlign: 'center',
+    fontWeight: '500',
+    color: '#fff',
   },
-  actionsSection: {
-    margin: 15,
+  selectedOptionText: {
+    color: '#000',
+    fontWeight: 'bold',
+  },
+  previewContainer: {
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  previewLabel: {
+    fontSize: 12,
+    opacity: 0.8,
+    marginBottom: 4,
+  },
+  previewText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  submitContainer: {
     padding: 20,
-    backgroundColor: 'rgba(57, 255, 20, 0.05)',
-    borderRadius: 15,
-  },
-  progressContainer: {
-    marginBottom: 20,
-  },
-  progressText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 4,
+    paddingBottom: 40,
   },
   submitButton: {
-    paddingHorizontal: 30,
-    paddingVertical: 15,
+    paddingVertical: 18,
     borderRadius: 25,
     alignItems: 'center',
     shadowColor: '#000',
