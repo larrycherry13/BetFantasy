@@ -145,27 +145,26 @@ export default function ParlayBuilder() {
       const oddsData = await OddsService.getPickOdds(pickTemplate, pick);
       
       if (oddsData) {
-        setPickOdds(prev => ({
-          ...prev,
-          [legIndex]: oddsData
-        }));
-        
-        // Recalculate parlay payout
-        updateParlayPayout();
+        setPickOdds(prev => {
+          const updatedOdds = {
+            ...prev,
+            [legIndex]: oddsData
+          };
+          
+          // Recalculate parlay payout with updated odds
+          const allOdds = Object.values(updatedOdds).map(pick => pick.odds);
+          if (allOdds.length === template.picks.length) {
+            const payoutResult = OddsService.calculateParlayPayout(allOdds, 100);
+            setParlayPayout(payoutResult);
+          }
+          
+          return updatedOdds;
+        });
       }
     } catch (error) {
       console.error('Failed to fetch pick odds:', error);
     } finally {
       setLoadingOdds(prev => ({ ...prev, [legIndex]: false }));
-    }
-  };
-  
-  // Update parlay payout calculation
-  const updateParlayPayout = () => {
-    const allOdds = Object.values(pickOdds).map(pick => pick.odds);
-    if (allOdds.length === template.picks.length) {
-      const payout = OddsService.calculateParlayPayout(allOdds, 100);
-      setParlayPayout(payout);
     }
   };
   

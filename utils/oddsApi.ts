@@ -575,6 +575,11 @@ export class OddsService {
     return -110; // Default
   }
   
+  // Format odds for display
+  static formatOdds(odds: number): string {
+    return odds > 0 ? `+${odds}` : `${odds}`;
+  }
+
   // Calculate total parlay odds and payout
   static calculateParlayPayout(individualOdds: number[], betAmount: number = 100): {
     totalOdds: number;
